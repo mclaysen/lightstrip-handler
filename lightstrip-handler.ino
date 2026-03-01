@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <Adafruit_NeoPixel.h>
+#include <arduino-timer.h>
 
 #include "arduino_secrets.h"
 
@@ -29,7 +30,11 @@ bool printWebData = true;  // set to false for better speed measurement
 
 const char broker[] = "192.168.86.78";
 int        port     = 1883;
-const char topic[]  = "rtl_433/main_floor";
+const char primaryTopic[]  = "arduino/lightstrip";
+const char preconfig[] = "arduino/lightstrip/*";
+const char heartbeatTopic[] = "arduino/lightstrip/heartbeat";
+
+auto timer = timer_create_default();
 
 void setup() {
   //Initialize serial and wait for port to open:
@@ -81,25 +86,52 @@ void setup() {
   Serial.println();
 
   Serial.print("Subscribing to topic: ");
-  Serial.println(topic);
+  Serial.println(primaryTopic);
   Serial.println();
 
   // subscribe to a topic
-  mqttClient.subscribe(topic);
+  mqttClient.subscribe(primaryTopic);
 
   // topics can be unsubscribed using:
   // mqttClient.unsubscribe(topic);
 
   Serial.print("Waiting for messages on topic: ");
-  Serial.println(topic);
+  Serial.println(primaryTopic);
   Serial.println();
 
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
   strip.setBrightness(BRIGHTNESS);
+
+  String willPayload = "disconnected";
+  bool willRetain = true;
+  int willQos = 1;
+
+  mqttClient.beginWill(heartbeatTopic, willPayload.length(), willRetain, willQos);
+  mqttClient.print(willPayload);
+  mqttClient.endWill();
+
+  timer.every(10000, publishHeartbeat);
+}
+
+bool publishHeartbeat(void *) {
+  mqttClient.beginMessage(heartbeatTopic);
+  mqttClient.print("alive");
+  mqttClient.endMessage();
+  Serial.println("Published heartbeat");
+  return true; // return true to repeat this timer
 }
 
 void loop() {
+  timer.tick();
+  mqttClient.poll();
+
+  if(!mqttClient.connected())
+  {
+    Serial.println("Disconnected from MQTT broker");
+    exit(0);
+  }
+
   int messageSize = mqttClient.parseMessage();
   if (messageSize) {
     // we received a message, print out the topic and contents
