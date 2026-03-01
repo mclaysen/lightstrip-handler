@@ -1,6 +1,8 @@
 #include <ArduinoMqttClient.h>
 #include <SPI.h>
 #include <Ethernet.h>
+#include <Adafruit_NeoPixel.h>
+
 #include "arduino_secrets.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
@@ -10,6 +12,14 @@ IPAddress ip(192, 168, 86, 177);
 
 EthernetClient client;
 MqttClient mqttClient(client);
+
+#define LED_PIN     13
+#define LED_COUNT  60
+#define BRIGHTNESS 20 // Set BRIGHTNESS to about 1/5 (max = 255)
+
+bool colorSet = false;
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
 // Variables to measure the speed
 unsigned long beginMicros, endMicros;
@@ -50,14 +60,9 @@ void setup() {
     Serial.println(Ethernet.localIP());
   }
 
-  // give the Ethernet shield a second to initialize:
-  delay(1000);
-  Serial.print("connecting to ");
-  Serial.println("...");
-
   // You can provide a unique client ID, if not set the library uses Arduino-millis()
   // Each client must have a unique client ID
-  //mqttClient.setId("light-strip");
+  mqttClient.setId("light-strip");
 
   // You can provide a username and password for authentication
   mqttClient.setUsernamePassword(MQTT_USERNAME, MQTT_PASSWORD);
@@ -88,6 +93,10 @@ void setup() {
   Serial.print("Waiting for messages on topic: ");
   Serial.println(topic);
   Serial.println();
+
+  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
+  strip.show();            // Turn OFF all pixels ASAP
+  strip.setBrightness(BRIGHTNESS);
 }
 
 void loop() {
@@ -107,5 +116,26 @@ void loop() {
     Serial.println();
 
     Serial.println();
+  }
+
+  if(!colorSet)
+  {
+    //colorWipe(strip.Color(255,   100,   0, 255)     , 25); // Red
+    colorSet = true;
+  }
+  pulseWhite(5);
+}
+void pulseWhite(uint8_t wait) {
+  for(int j=0; j<256; j++) { // Ramp up from 0 to 255
+    // Fill entire strip with white at gamma-corrected brightness level 'j':
+    strip.fill(strip.Color(255, 100, 0, strip.gamma8(j)));
+    strip.show();
+    delay(wait);
+  }
+
+  for(int j=255; j>=0; j--) { // Ramp down from 255 to 0
+    strip.fill(strip.Color(255, 100, 0, strip.gamma8(j)));
+    strip.show();
+    delay(wait);
   }
 }
