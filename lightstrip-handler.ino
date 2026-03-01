@@ -2,7 +2,6 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <Adafruit_NeoPixel.h>
-#include <arduino-timer.h>
 
 #include "arduino_secrets.h"
 
@@ -19,6 +18,7 @@ MqttClient mqttClient(client);
 #define BRIGHTNESS 20 // Set BRIGHTNESS to about 1/5 (max = 255)
 
 bool colorSet = false;
+bool connectedToBroker = false;
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
@@ -33,17 +33,15 @@ int        port     = 1883;
 const char primaryTopic[]  = "arduino/lightstrip";
 const char preconfig[] = "arduino/lightstrip/*";
 const char heartbeatTopic[] = "arduino/lightstrip/heartbeat";
+const long heartbeatInterval = 10000;
+unsigned long previousMillis = 0;
 
-auto timer = timer_create_default();
 
 void setup() {
   //Initialize serial and wait for port to open:
   Ethernet.init(10);  // Most Arduino shields
 
   Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
 
   Serial.println("Initialize Ethernet with DHCP:");
   if (Ethernet.begin(mac) == 0) {
@@ -65,56 +63,63 @@ void setup() {
     Serial.println(Ethernet.localIP());
   }
 
-  // You can provide a unique client ID, if not set the library uses Arduino-millis()
-  // Each client must have a unique client ID
-  mqttClient.setId("light-strip");
-
-  // You can provide a username and password for authentication
-  mqttClient.setUsernamePassword(MQTT_USERNAME, MQTT_PASSWORD);
-
-  Serial.print("Attempting to connect to the MQTT broker: ");
-  Serial.println(broker);
-
-  if (!mqttClient.connect(broker, port)) {
-    Serial.print("MQTT connection failed! Error code = ");
-    Serial.println(mqttClient.connectError());
-
-    while (1);
-  }
-
-  Serial.println("You're connected to the MQTT broker!");
-  Serial.println();
-
-  Serial.print("Subscribing to topic: ");
-  Serial.println(primaryTopic);
-  Serial.println();
-
-  // subscribe to a topic
-  mqttClient.subscribe(primaryTopic);
-
-  // topics can be unsubscribed using:
-  // mqttClient.unsubscribe(topic);
-
-  Serial.print("Waiting for messages on topic: ");
-  Serial.println(primaryTopic);
-  Serial.println();
+  connectToMqttBroker();
 
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
   strip.setBrightness(BRIGHTNESS);
-
-  String willPayload = "disconnected";
-  bool willRetain = true;
-  int willQos = 1;
-
-  mqttClient.beginWill(heartbeatTopic, willPayload.length(), willRetain, willQos);
-  mqttClient.print(willPayload);
-  mqttClient.endWill();
-
-  timer.every(10000, publishHeartbeat);
 }
 
-bool publishHeartbeat(void *) {
+void connectToMqttBroker() {
+  if(!connectedToBroker)
+  {
+    // You can provide a unique client ID, if not set the library uses Arduino-millis()
+    // Each client must have a unique client ID
+    mqttClient.setId("lightstrip-livingroom");
+
+    // You can provide a username and password for authentication
+    mqttClient.setUsernamePassword(MQTT_USERNAME, MQTT_PASSWORD);
+
+    String willPayload = "disconnected";
+    bool willRetain = true;
+    int willQos = 1;
+
+    mqttClient.beginWill(heartbeatTopic, willPayload.length(), willRetain, willQos);
+    mqttClient.print(willPayload);
+    mqttClient.endWill();
+
+    Serial.print("Attempting to connect to the MQTT broker: ");
+    Serial.println(broker);
+
+    if (!mqttClient.connect(broker, port)) {
+      Serial.print("MQTT connection failed! Error code = ");
+      Serial.println(mqttClient.connectError());
+    }
+    else
+    {
+      connectedToBroker = true;
+    
+      Serial.println("You're connected to the MQTT broker!");
+      Serial.println();
+
+      Serial.print("Subscribing to topic: ");
+      Serial.println(primaryTopic);
+      Serial.println();
+
+      // subscribe to a topic
+      mqttClient.subscribe(primaryTopic);
+
+      // topics can be unsubscribed using:
+      // mqttClient.unsubscribe(topic);
+
+      Serial.print("Waiting for messages on topic: ");
+      Serial.println(primaryTopic);
+      Serial.println();
+    }
+  }
+}
+
+bool publishHeartbeat() {
   mqttClient.beginMessage(heartbeatTopic);
   mqttClient.print("alive");
   mqttClient.endMessage();
@@ -123,13 +128,21 @@ bool publishHeartbeat(void *) {
 }
 
 void loop() {
-  timer.tick();
   mqttClient.poll();
 
   if(!mqttClient.connected())
   {
     Serial.println("Disconnected from MQTT broker");
-    exit(0);
+    connectedToBroker = false;
+    connectToMqttBroker();
+  }
+
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= heartbeatInterval && connectedToBroker) {
+    // save the last time a message was sent
+    previousMillis = currentMillis;
+    publishHeartbeat();
   }
 
   int messageSize = mqttClient.parseMessage();
