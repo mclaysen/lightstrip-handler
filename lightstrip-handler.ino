@@ -4,6 +4,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #include "arduino_secrets.h"
+#include "LightStrip.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
@@ -13,20 +14,14 @@ IPAddress ip(192, 168, 86, 177);
 EthernetClient client;
 MqttClient mqttClient(client);
 
-#define LED_PIN     13
-#define LED_COUNT  60
-#define BRIGHTNESS 20 // Set BRIGHTNESS to about 1/5 (max = 255)
-
-bool colorSet = false;
 bool connectedToBroker = false;
-
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
 // Variables to measure the speed
 unsigned long beginMicros, endMicros;
 unsigned long byteCount = 0;
 bool printWebData = true;  // set to false for better speed measurement
 
+LightStrip strip(60);
 
 const char broker[] = "192.168.86.78";
 int        port     = 1883;
@@ -64,10 +59,7 @@ void setup() {
   }
 
   connectToMqttBroker();
-
-  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
-  strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(BRIGHTNESS);
+  strip.begin();
 }
 
 void connectToMqttBroker() {
@@ -163,24 +155,5 @@ void loop() {
     Serial.println();
   }
 
-  if(!colorSet)
-  {
-    //colorWipe(strip.Color(255,   100,   0, 255)     , 25); // Red
-    colorSet = true;
-  }
-  pulseWhite(5);
-}
-void pulseWhite(uint8_t wait) {
-  for(int j=0; j<256; j++) { // Ramp up from 0 to 255
-    // Fill entire strip with white at gamma-corrected brightness level 'j':
-    strip.fill(strip.Color(255, 100, 0, strip.gamma8(j)));
-    strip.show();
-    delay(wait);
-  }
-
-  for(int j=255; j>=0; j--) { // Ramp down from 255 to 0
-    strip.fill(strip.Color(255, 100, 0, strip.gamma8(j)));
-    strip.show();
-    delay(wait);
-  }
+  strip.pulseWhite(5);
 }
