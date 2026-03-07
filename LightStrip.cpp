@@ -7,6 +7,7 @@ LightStrip::LightStrip(uint8_t brightness) {
   // constructor implementation
  strip = new Adafruit_NeoPixel(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
  this->brightness = brightness;
+ this->offSetting = strip->Color(0, 0, 0, 0);
 }
 
 void LightStrip::begin() {
@@ -16,6 +17,18 @@ void LightStrip::begin() {
 }
 
 void LightStrip::update() {
+  strip->setBrightness(this->brightness);
+}
+
+void LightStrip::setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+  for(int i=0; i<strip->numPixels(); i++) {
+    strip->setPixelColor(i, strip->Color(r, g, b, strip->gamma8(w)));
+  }
+  strip->show();
+}
+
+void LightStrip::setBrightness(uint8_t brightness) {
+  this->brightness = brightness;
   strip->setBrightness(this->brightness);
 }
 
@@ -32,6 +45,14 @@ void LightStrip::pulseWhite(uint8_t wait) {
     strip->show();
     delay(wait);
   }
+}
+
+void LightStrip::turnOff() {
+  strip->clear();
+  for(int i=0; i<strip->numPixels(); i++) {
+    strip->setPixelColor(i, offSetting);
+  }
+  strip->show();
 }
 
 LightStrip::~LightStrip() { delete strip; }

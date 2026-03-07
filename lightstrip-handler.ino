@@ -25,9 +25,11 @@ LightStrip strip(60);
 
 const char broker[] = "192.168.86.78";
 int        port     = 1883;
-const char primaryTopic[]  = "arduino/lightstrip";
-const char preconfig[] = "arduino/lightstrip/*";
-const char heartbeatTopic[] = "arduino/lightstrip/heartbeat";
+const char statusTopic[]  = "ic/livingroom/lightstrip/status";
+const char switchTopic[] = "ic/livingroom/lightstrip/switch";
+const char brightnessStateTopic[] = "ic/livingroom/lightstrip/brightness/status";
+const char brightnessSetTopic[] = "ic/livingroom/lightstrip/brightness/set";
+const char heartbeatTopic[] = "ic/livingroom/lightstrip/heartbeat";
 const long heartbeatInterval = 10000;
 unsigned long previousMillis = 0;
 
@@ -60,6 +62,19 @@ void setup() {
 
   connectToMqttBroker();
   strip.begin();
+  strip.pulseWhite(15);
+  publishInitialStatus();
+}
+
+void publishInitialStatus() {
+  mqttClient.beginMessage(statusTopic);
+  mqttClient.print("ON");
+  mqttClient.endMessage();
+
+  mqttClient.beginMessage(brightnessStateTopic);
+  mqttClient.print("50");
+  mqttClient.endMessage();
+  Serial.println("Published initial status");
 }
 
 void connectToMqttBroker() {
@@ -95,18 +110,14 @@ void connectToMqttBroker() {
       Serial.println();
 
       Serial.print("Subscribing to topic: ");
-      Serial.println(primaryTopic);
+      Serial.println(switchTopic);
       Serial.println();
+
+      mqttClient.onMessage(onMqttMessage);
 
       // subscribe to a topic
-      mqttClient.subscribe(primaryTopic);
-
-      // topics can be unsubscribed using:
-      // mqttClient.unsubscribe(topic);
-
-      Serial.print("Waiting for messages on topic: ");
-      Serial.println(primaryTopic);
-      Serial.println();
+      mqttClient.subscribe(switchTopic);
+      mqttClient.subscribe(brightnessSetTopic);
     }
   }
 }
@@ -136,24 +147,56 @@ void loop() {
     previousMillis = currentMillis;
     publishHeartbeat();
   }
+}
+void onMqttMessage(int messageSize) {
+  String topic = mqttClient.messageTopic();
+  Serial.print("Message arrived on topic: "); 
+  Serial.print(topic);
 
-  int messageSize = mqttClient.parseMessage();
-  if (messageSize) {
-    // we received a message, print out the topic and contents
-    Serial.print("Received a message with topic '");
-    Serial.print(mqttClient.messageTopic());
-    Serial.print("', length ");
-    Serial.print(messageSize);
-    Serial.println(" bytes:");
+  // we received a message, print out the topic and contents
+  char message[messageSize + 1];
 
-    // use the Stream interface to print the contents
-    while (mqttClient.available()) {
-      Serial.print((char)mqttClient.read());
-    }
-    Serial.println();
+  int i = 0;
 
-    Serial.println();
+  while(mqttClient.available() && i < messageSize) {
+    message[i] = (char)mqttClient.read();
+    i++;
   }
+  message[i] = '\0'; // Null-terminate the string
 
-  strip.pulseWhite(5);
+  Serial.print("Received message: ");
+  Serial.println(message);
+  Serial.println();
+  
+  if(topic.indexOf("brightness")>=0)
+  {
+    int brightness = atoi(message);
+    strip.setBrightness(brightness);
+    mqttClient.beginMessage(brightnessStateTopic);
+    mqttClient.print(message);
+    mqttClient.endMessage();
+
+  }
+  else
+  {
+    if(strcmp(message, "ON") == 0)
+    {
+      strip.setColor(255, 150, 0, 30);
+      mqttClient.beginMessage(statusTopic);
+      mqttClient.print("ON");
+      mqttClient.endMessage();
+    }
+    else if(strcmp(message, "OFF") == 0)
+    {
+      strip.turnOff();
+      mqttClient.beginMessage(statusTopic);
+      mqttClient.print("OFF");
+      mqttClient.endMessage();
+    }
+    else
+    {
+      Serial.println("Unknown command received");
+    }
+  }
+  Serial.println();
 }
