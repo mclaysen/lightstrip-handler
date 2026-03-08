@@ -1,16 +1,17 @@
 #ifndef LIGHTSTRIP_H
 #define LIGHTSTRIP_H
 
-#include <Adafruit_NeoPixel.h>
+#include <FastLED.h>
 
 class LightStrip {
 private:
-  Adafruit_NeoPixel* strip;
+  CRGB* strip;
   uint8_t brightness;
   uint32_t offSetting;
+  void fillAndShow(CRGB color);
 
 public:
-  LightStrip(uint8_t brightness = 50);
+  LightStrip(uint8_t brightness = 10);
   ~LightStrip(); 
   void begin();
   void update();
@@ -18,6 +19,7 @@ public:
   void pulseWhite(uint8_t wait);
   void turnOff();
   void setBrightness(uint8_t brightness);
+  void testSequential();
   // other method declarations...
 };
 

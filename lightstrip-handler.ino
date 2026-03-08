@@ -1,7 +1,6 @@
 #include <ArduinoMqttClient.h>
 #include <SPI.h>
 #include <Ethernet.h>
-#include <Adafruit_NeoPixel.h>
 
 #include "arduino_secrets.h"
 #include "LightStrip.h"
@@ -21,7 +20,7 @@ unsigned long beginMicros, endMicros;
 unsigned long byteCount = 0;
 bool printWebData = true;  // set to false for better speed measurement
 
-LightStrip strip(60);
+LightStrip strip(10);  // 10 brightness instead of 50
 
 const char broker[] = "192.168.86.78";
 int        port     = 1883;
@@ -32,6 +31,7 @@ const char brightnessSetTopic[] = "ic/livingroom/lightstrip/brightness/set";
 const char heartbeatTopic[] = "ic/livingroom/lightstrip/heartbeat";
 const long heartbeatInterval = 10000;
 unsigned long previousMillis = 0;
+bool stripOn = true;
 
 
 void setup() {
@@ -62,7 +62,8 @@ void setup() {
 
   connectToMqttBroker();
   strip.begin();
-  strip.pulseWhite(15);
+  // Initialize with a simple color test instead of pulseWhite
+  //strip.setColor(255, 150, 0, 0);  // Orange color for testing
   publishInitialStatus();
 }
 
@@ -140,6 +141,11 @@ void loop() {
     connectToMqttBroker();
   }
 
+  if (stripOn) {
+    // Match the FastLED example behavior: recompute noise and show every loop.
+    strip.setColor(255, 150, 0, 30);
+  }
+
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= heartbeatInterval && connectedToBroker) {
@@ -181,6 +187,7 @@ void onMqttMessage(int messageSize) {
   {
     if(strcmp(message, "ON") == 0)
     {
+      stripOn = true;
       strip.setColor(255, 150, 0, 30);
       mqttClient.beginMessage(statusTopic);
       mqttClient.print("ON");
@@ -188,6 +195,7 @@ void onMqttMessage(int messageSize) {
     }
     else if(strcmp(message, "OFF") == 0)
     {
+      stripOn = false;
       strip.turnOff();
       mqttClient.beginMessage(statusTopic);
       mqttClient.print("OFF");
