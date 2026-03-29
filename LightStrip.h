@@ -16,11 +16,10 @@ public:
   void begin();
   void update();
   void setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0);
-  void pulseWhite(uint8_t wait);
+  void setWhite(uint8_t w);
   void turnOff();
   void setBrightness(uint8_t brightness);
-  void testSequential();
-  // other method declarations...
+  void setKelvin(uint16_t kelvin, uint8_t level);
 };
 
 #endif

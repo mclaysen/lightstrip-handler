@@ -1,9 +1,11 @@
-#include <ArduinoMqttClient.h>
 #include <SPI.h>
 #include <Ethernet.h>
+#include <ArduinoMqttClient.h>
 
 #include "arduino_secrets.h"
 #include "LightStrip.h"
+#include "Command.h"
+#include "Topics.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
@@ -20,18 +22,12 @@ unsigned long beginMicros, endMicros;
 unsigned long byteCount = 0;
 bool printWebData = true;  // set to false for better speed measurement
 
-LightStrip strip(10);  // 10 brightness instead of 50
+LightStrip strip(70);  // 10 brightness instead of 50
 
 const char broker[] = "192.168.86.78";
 int        port     = 1883;
-const char statusTopic[]  = "ic/livingroom/lightstrip/status";
-const char switchTopic[] = "ic/livingroom/lightstrip/switch";
-const char brightnessStateTopic[] = "ic/livingroom/lightstrip/brightness/status";
-const char brightnessSetTopic[] = "ic/livingroom/lightstrip/brightness/set";
-const char heartbeatTopic[] = "ic/livingroom/lightstrip/heartbeat";
 const long heartbeatInterval = 10000;
 unsigned long previousMillis = 0;
-bool stripOn = true;
 
 
 void setup() {
@@ -68,14 +64,14 @@ void setup() {
 }
 
 void publishInitialStatus() {
-  mqttClient.beginMessage(statusTopic);
+ /* mqttClient.beginMessage(Topics::LightstripSwitchStatus);
   mqttClient.print("ON");
   mqttClient.endMessage();
 
-  mqttClient.beginMessage(brightnessStateTopic);
+  mqttClient.beginMessage(Topics::LightstripBrightnessStatus);
   mqttClient.print("50");
   mqttClient.endMessage();
-  Serial.println("Published initial status");
+  Serial.println("Published initial status");*/
 }
 
 void connectToMqttBroker() {
@@ -92,7 +88,7 @@ void connectToMqttBroker() {
     bool willRetain = true;
     int willQos = 1;
 
-    mqttClient.beginWill(heartbeatTopic, willPayload.length(), willRetain, willQos);
+    mqttClient.beginWill(Topics::LightstripHeartbeat, willPayload.length(), willRetain, willQos);
     mqttClient.print(willPayload);
     mqttClient.endWill();
 
@@ -110,21 +106,21 @@ void connectToMqttBroker() {
       Serial.println("You're connected to the MQTT broker!");
       Serial.println();
 
-      Serial.print("Subscribing to topic: ");
-      Serial.println(switchTopic);
-      Serial.println();
-
       mqttClient.onMessage(onMqttMessage);
 
-      // subscribe to a topic
-      mqttClient.subscribe(switchTopic);
-      mqttClient.subscribe(brightnessSetTopic);
+      for(Topic topic : TopicsAvailable::list) {
+        Serial.println("Subscribing to topic: ");
+        Serial.print(topic.name);
+        Serial.println();
+        mqttClient.subscribe(topic.name);
+      }
+
     }
   }
 }
 
 bool publishHeartbeat() {
-  mqttClient.beginMessage(heartbeatTopic);
+  mqttClient.beginMessage(Topics::LightstripHeartbeat);
   mqttClient.print("alive");
   mqttClient.endMessage();
   Serial.println("Published heartbeat");
@@ -140,12 +136,8 @@ void loop() {
     connectedToBroker = false;
     connectToMqttBroker();
   }
-
-  if (stripOn) {
-    // Match the FastLED example behavior: recompute noise and show every loop.
-    strip.setColor(255, 150, 0, 30);
-  }
-
+  //strip.setColor(0, 0, 0, 255);  // Orange color for testing
+  strip.setKelvin(2700, 220);
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= heartbeatInterval && connectedToBroker) {
@@ -178,7 +170,7 @@ void onMqttMessage(int messageSize) {
   {
     int brightness = atoi(message);
     strip.setBrightness(brightness);
-    mqttClient.beginMessage(brightnessStateTopic);
+    mqttClient.beginMessage(Topics::LightstripBrightnessStatus);
     mqttClient.print(message);
     mqttClient.endMessage();
 
@@ -187,17 +179,15 @@ void onMqttMessage(int messageSize) {
   {
     if(strcmp(message, "ON") == 0)
     {
-      stripOn = true;
       strip.setColor(255, 150, 0, 30);
-      mqttClient.beginMessage(statusTopic);
+      mqttClient.beginMessage(Topics::LightstripSwitchStatus);
       mqttClient.print("ON");
       mqttClient.endMessage();
     }
     else if(strcmp(message, "OFF") == 0)
     {
-      stripOn = false;
       strip.turnOff();
-      mqttClient.beginMessage(statusTopic);
+      mqttClient.beginMessage(Topics::LightstripSwitchStatus);
       mqttClient.print("OFF");
       mqttClient.endMessage();
     }

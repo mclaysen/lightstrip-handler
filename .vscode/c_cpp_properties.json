@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "name": "Arduino",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${env:USERPROFILE}/OneDrive/Documents/Arduino/libraries/**",
+        "${env:LOCALAPPDATA}/Arduino15/packages/**"
+      ],
+      "defines": [
+        "ARDUINO=10819"
+      ],
+      "compilerPath": "",
+      "intelliSenseMode": "windows-gcc-x64",
+      "cStandard": "c11",
+      "cppStandard": "c++17"
+    }
+  ],
+  "version": 4
+}

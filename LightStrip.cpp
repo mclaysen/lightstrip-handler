@@ -1,24 +1,19 @@
 #include "LightStrip.h"
+#include <math.h>
 
-// Pin 13 is SPI SCK on many Arduino boards and conflicts with Ethernet shields.
-// Use a non-SPI GPIO for LED data.
 #define LED_PIN     9
 #define LED_COUNT  60
 
-// Time scaling factors for each component
-#define TIME_FACTOR_HUE 60
-#define TIME_FACTOR_SAT 100
-#define TIME_FACTOR_VAL 100
-
 Rgbw rgbw = Rgbw(
     kRGBWDefaultColorTemp,
-    kRGBWExactColors,      // Mode
-    W3                     // W-placement
+    kRGBWExactColors,      
+    W3                     
 );
+
+struct RGBf { float r, g, b; };
 
 typedef WS2812<LED_PIN, RGB> ControllerT;  // RGB mode must be RGB, no re-ordering allowed.
 static RGBWEmulatedController<ControllerT, GRB> rgbwEmu(rgbw);  // ordering goes here.
-
 
 LightStrip::LightStrip(uint8_t brightness) {
   // constructor implementation
@@ -34,25 +29,48 @@ void LightStrip::begin() {
   delay(2000);
 }
 
+static float clamp01(float x) {
+  if (x < 0.0f) return 0.0f;
+  if (x > 1.0f) return 1.0f;
+  return x;
+}
+
+static RGBf kelvinToRgbNorm(uint16_t kelvin) {
+  // Valid-ish range for this approximation
+  float k = (float)constrain((int)kelvin, 1000, 40000) / 100.0f;
+
+  float r, g, b;
+
+  // Red
+  if (k <= 66.0f) r = 255.0f;
+  else r = 329.698727446f * powf(k - 60.0f, -0.1332047592f);
+
+  // Green
+  if (k <= 66.0f) g = 99.4708025861f * logf(k) - 161.1195681661f;
+  else g = 288.1221695283f * powf(k - 60.0f, -0.0755148492f);
+
+  // Blue
+  if (k >= 66.0f) b = 255.0f;
+  else if (k <= 19.0f) b = 0.0f;
+  else b = 138.5177312231f * logf(k - 10.0f) - 305.0447927307f;
+
+  RGBf out;
+  out.r = clamp01(r / 255.0f);
+  out.g = clamp01(g / 255.0f);
+  out.b = clamp01(b / 255.0f);
+  return out;
+}
+
 void LightStrip::update() {
   FastLED.setBrightness(this->brightness);
 }
 
 void LightStrip::setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
-  uint32_t ms = millis();
+  const uint8_t rr = qadd8(r, w);
+  const uint8_t gg = qadd8(g, w);
+  const uint8_t bb = qadd8(b, w);
 
-  for(int i=0; i<LED_COUNT; i++) {
-    // Use different noise functions for each LED and each color component
-    uint8_t hue = inoise16(ms * TIME_FACTOR_HUE, i * 1000, 0) >> 8;
-    uint8_t sat = inoise16(ms * TIME_FACTOR_SAT, i * 2000, 1000) >> 8;
-    uint8_t val = inoise16(ms * TIME_FACTOR_VAL, i * 3000, 2000) >> 8;
-    
-    // Map the noise to full range for saturation and value
-    sat = map(sat, 0, 255, 30, 255);
-    val = map(val, 0, 255, 100, 255);
-    
-    strip[i] = CHSV(hue, sat, val);
-  }
+  fill_solid(strip, LED_COUNT, CRGB(rr, gg, bb));
   FastLED.show();
 }
 
@@ -61,34 +79,15 @@ void LightStrip::setBrightness(uint8_t brightness) {
   FastLED.setBrightness(this->brightness);
 }
 
-void LightStrip::pulseWhite(uint8_t wait) {
-    static size_t frame_count = 0;
-    int frame_cycle = frame_count % 4;
-    frame_count++;
+void LightStrip::setKelvin(uint16_t kelvin, uint8_t level) {
+  RGBf c = kelvinToRgbNorm(kelvin);
 
-    CRGB pixel;
-    switch (frame_cycle) {
-        case 0:
-            pixel = CRGB::Red;
-            break;
-        case 1:
-            pixel = CRGB::Green;
-            break;
-        case 2:
-            pixel = CRGB::Blue;
-            break;
-        case 3:
-            pixel = CRGB::White;
-            break;
-    }
+  uint8_t r = (uint8_t)(c.r * level + 0.5f);
+  uint8_t g = (uint8_t)(c.g * level + 0.5f);
+  uint8_t b = (uint8_t)(c.b * level + 0.5f);
 
-    for (int i = -1; i < frame_cycle; ++i) {
-        fillAndShow(pixel);
-        delay(200);
-        fillAndShow(CRGB::Black);
-        delay(200);
-    }
-    delay(1000);
+  fill_solid(strip, LED_COUNT, CRGB(r, g, b));
+  FastLED.show();
 }
 
 void LightStrip::fillAndShow(CRGB color) {
@@ -98,38 +97,14 @@ void LightStrip::fillAndShow(CRGB color) {
   FastLED.show();
 }
 
-void LightStrip::turnOff() {
-  fillAndShow(CRGB::Black);
+void LightStrip::setWhite(uint8_t w) {
+  // Pure white request for RGBW emulation path.
+  fill_solid(strip, LED_COUNT, CRGB(w, w, w));
+  FastLED.show();
 }
 
-void LightStrip::testSequential() {
-    static size_t frame_count = 0;
-    int frame_cycle = frame_count % 4;
-    frame_count++;
-
-    CRGB pixel;
-    switch (frame_cycle) {
-        case 0:
-            pixel = CRGB::Red;
-            break;
-        case 1:
-            pixel = CRGB::Green;
-            break;
-        case 2:
-            pixel = CRGB::Blue;
-            break;
-        case 3:
-            pixel = CRGB::White;
-            break;
-    }
-
-    for (int i = -1; i < frame_cycle; ++i) {
-        fillAndShow(pixel);
-        delay(200);
-        fillAndShow(CRGB::Black);
-        delay(200);
-    }
-    delay(1000);
+void LightStrip::turnOff() {
+  fillAndShow(CRGB::Black);
 }
 
 LightStrip::~LightStrip() { delete[] strip; }
