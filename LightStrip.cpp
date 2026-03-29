@@ -19,15 +19,11 @@ static RGBWEmulatedController<ControllerT, GRB> rgbwEmu(rgbw);  // ordering goes
 LightStrip::LightStrip(uint8_t brightness) {
   // constructor implementation
  strip = new CRGB[LED_COUNT];
- this->brightness = brightness;
- this->offSetting = CRGB::Black;
 }
 
 void LightStrip::begin() {
   // Emulate RGBW output exactly like the reference example, but on this class buffer.
   FastLED.addLeds(&rgbwEmu, strip, LED_COUNT);
-  FastLED.setBrightness(this->brightness);
-  delay(2000);
 }
 
 static float clamp01(float x) {
@@ -62,10 +58,6 @@ static RGBf kelvinToRgbNorm(uint16_t kelvin) {
   return out;
 }
 
-void LightStrip::update() {
-  FastLED.setBrightness(this->brightness);
-}
-
 void LightStrip::setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
   const uint8_t rr = qadd8(r, w);
   const uint8_t gg = qadd8(g, w);
@@ -76,8 +68,7 @@ void LightStrip::setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
 }
 
 void LightStrip::setBrightness(uint8_t brightness) {
-  this->brightness = brightness;
-  FastLED.setBrightness(this->brightness);
+  FastLED.setBrightness(brightness);
   FastLED.show();
 }
 

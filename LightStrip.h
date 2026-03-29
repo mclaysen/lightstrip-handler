@@ -6,8 +6,6 @@
 class LightStrip {
 private:
   CRGB* strip;
-  uint8_t brightness;
-  uint32_t offSetting;
   void fillAndShow(CRGB color);
 
 public:
