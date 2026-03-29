@@ -1,6 +1,5 @@
 #include "LightStrip.h"
-#include <math.h>
-using namespace std;
+#include <cmath>
 
 #define LED_PIN     9
 #define LED_COUNT  60
@@ -40,16 +39,16 @@ static RGBf kelvinToRgbNorm(uint16_t kelvin) {
 
   // Red
   if (k <= 66.0f) r = 255.0f;
-  else r = 329.698727446f * std::pow(k - 60.0f, -0.1332047592f);
+  else r = 329.698727446f * pow(k - 60.0f, -0.1332047592f);
 
   // Green
-  if (k <= 66.0f) g = 99.4708025861f * std::log(k) - 161.1195681661f;
-  else g = 288.1221695283f * std::pow(k - 60.0f, -0.0755148492f);
+  if (k <= 66.0f) g = 99.4708025861f * log(k) - 161.1195681661f;
+  else g = 288.1221695283f * pow(k - 60.0f, -0.0755148492f);
 
   // Blue
   if (k >= 66.0f) b = 255.0f;
   else if (k <= 19.0f) b = 0.0f;
-  else b = 138.5177312231f * std::log(k - 10.0f) - 305.0447927307f;
+  else b = 138.5177312231f * log(k - 10.0f) - 305.0447927307f;
 
   RGBf out;
   out.r = clamp01(r / 255.0f);
