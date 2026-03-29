@@ -37,12 +37,16 @@ bool EventHandler::publishStatus(const LightStripStatus& status) {
     mqttClient_.print(status.brightness);
     mqttClient_.endMessage();
 
+    mqttClient_.beginMessage(Topics::LightstripRgbwStatus);
+    mqttClient_.print(status.rgbw);
+    mqttClient_.endMessage();
+
     return true;
 }
 
-bool EventHandler::publishHeartbeat(const char* value) {
+bool EventHandler::publishHeartbeat(HeartbeatStatus status) {
     mqttClient_.beginMessage(Topics::LightstripHeartbeat);
-    mqttClient_.print(value);
+    mqttClient_.print(heartbeatPayload(status));
     mqttClient_.endMessage();
     Serial.println("Published heartbeat");
     return true; 
@@ -55,7 +59,7 @@ bool EventHandler::connectToBrokerIfNeeded() {
 
         mqttClient_.setUsernamePassword(config_.username, config_.password);
 
-        String willPayload = "disconnected";
+        String willPayload = heartbeatPayload(HeartbeatStatus::Dead);
         bool willRetain = true;
         int willQos = 1;
 
@@ -112,25 +116,39 @@ void EventHandler::onMqttMessage(int messageSize) {
 
 CommandEvent EventHandler::parseMessage(const char* topic, const char* payload) const {
     CommandEvent event;
-    event.hasValue = false;
+    event.valueType = CommandValueType::None;
 
     if (strcmp(topic, Topics::LightstripSwitchCommand) == 0) {
         if (strcmp(payload, "ON") == 0) {
             event.command = Command::On;
-            event.hasValue = false;
+            event.valueType = CommandValueType::None;
         } else if (strcmp(payload, "OFF") == 0) {
             event.command = Command::Off;
-            event.hasValue = false;
+            event.valueType = CommandValueType::None;
         } else {
             event.command = Command::Unknown;
         }
-    } else if (strcmp(topic, Topics::LightstripBrightnessCommand) == 0) {
+    } 
+    else if (strcmp(topic, Topics::LightstripBrightnessCommand) == 0) {
         event.command = Command::ChangeBrightness;
-        event.value = atoi(payload);
-        event.hasValue = true;
-    } else {
+        event.valueType = CommandValueType::Integer;
+        event.intValue = atoi(payload);
+    } 
+    else if(strcasecmp(topic, Topics::LightstripRgbwSet) == 0) 
+    {
+        event.command = Command::ChangeColor;
+        event.valueType = CommandValueType::Rgbw;
+        sscanf(payload, "%hhu,%hhu,%hhu,%hhu", &event.rgbwValue.r, &event.rgbwValue.g, &event.rgbwValue.b, &event.rgbwValue.w);
+    } 
+    else if(strcasecmp(topic, Topics::LightstripTempSet) == 0) 
+    {
+        event.command = Command::ChangeTemperature;
+        event.valueType = CommandValueType::Integer;
+        event.intValue = atoi(payload);
+    }
+    else {
         event.command = Command::Unknown;
-        event.hasValue = false;
+        event.valueType = CommandValueType::None;
     }
     return event;
 }

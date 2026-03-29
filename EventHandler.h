@@ -6,10 +6,31 @@
 #include "Command.h"
 #include "LightstripStatus.h"
 
+enum class HeartbeatStatus : uint8_t {
+    Alive,
+    Dead
+};
+
+enum class CommandValueType : uint8_t {
+    None,
+    Integer,
+    Rgbw
+};
+
+struct RgbwValue {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t w;
+};
+
 struct CommandEvent {
     Command command;
-    int16_t value;      // brightness, kelvin, etc.
-    bool hasValue;
+    CommandValueType valueType;
+    union {
+        int16_t intValue;
+        RgbwValue rgbwValue;
+    };
 };
 
 struct EventHandlerConfig {
@@ -32,9 +53,12 @@ public:
     void setCommandCallback(CommandCallback callback);
 
     bool publishStatus(const LightStripStatus& status);
-    bool publishHeartbeat(const char* value = "alive");
+    bool publishHeartbeat(HeartbeatStatus status = HeartbeatStatus::Alive);
 
 private:
+    String heartbeatPayload(HeartbeatStatus status) const {
+        return status == HeartbeatStatus::Alive ? "alive" : "dead";
+    }
     bool connectToBrokerIfNeeded();
     void suscribeToTopics();
     void onMqttMessage(int messageSize);

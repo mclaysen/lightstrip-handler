@@ -20,7 +20,7 @@ MqttClient mqttClient(client);
 
 LightStrip strip(70);
 
-LightStripStatus currentStatus = {true, 50};
+LightStripStatus currentStatus = {true, 50, "255,255,255,50", 2700};
 
 const char broker[] = "192.168.86.78";
 uint16_t        port     = 1883;
@@ -56,16 +56,28 @@ void setup() {
     Serial.println(Ethernet.localIP());
   }
 
-  strip.begin();
+  initializeStrip();
   eventHandler.init();
   eventHandler.setCommandCallback(commandCallback);
+}
+
+void initializeStrip() {
+  strip.begin();
+  strip.setBrightness(currentStatus.brightness);
+  if (currentStatus.isOn) {
+    uint8_t r, g, b, w;
+    sscanf(currentStatus.rgbw.c_str(), "%hhu,%hhu,%hhu,%hhu", &r, &g, &b, &w);
+    strip.setColor(r, g, b, w);
+  } else {
+    strip.turnOff();
+  }
   eventHandler.publishStatus(currentStatus);
 }
 
 void commandCallback(const CommandEvent& event) {
   switch (event.command) {
     case Command::On:
-      strip.setKelvin(2700, 220);
+      strip.setBrightness(currentStatus.brightness);
       currentStatus.isOn = true;
       break;
     case Command::Off:
@@ -73,11 +85,16 @@ void commandCallback(const CommandEvent& event) {
       currentStatus.isOn = false;
       break;
     case Command::ChangeBrightness:
-      strip.setBrightness(event.value);
-      currentStatus.brightness = event.value;
+      strip.setBrightness(event.intValue);
+      currentStatus.brightness = event.intValue;
       break;
-    case Command::ChangeKelvin:
-      strip.setKelvin(event.value, 220);
+    case Command::ChangeTemperature:
+      strip.setKelvin(event.intValue, 220);
+      currentStatus.temperature = event.intValue;
+      break;
+    case Command::ChangeColor:
+      strip.setColor(event.rgbwValue.r, event.rgbwValue.g, event.rgbwValue.b, event.rgbwValue.w);
+      currentStatus.rgbw = String(event.rgbwValue.r) + "," + String(event.rgbwValue.g) + "," + String(event.rgbwValue.b) + "," + String(event.rgbwValue.w);
       break;
     default:
       Serial.println("Unknown command received");
