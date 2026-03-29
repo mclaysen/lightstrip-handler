@@ -9,7 +9,7 @@ private:
   void fillAndShow(CRGB color);
 
 public:
-  LightStrip(uint8_t brightness = 10);
+  LightStrip();
   ~LightStrip(); 
   void begin();
   void update();

@@ -16,7 +16,7 @@ struct RGBf { float r, g, b; };
 typedef WS2812<LED_PIN, RGB> ControllerT;  // RGB mode must be RGB, no re-ordering allowed.
 static RGBWEmulatedController<ControllerT, GRB> rgbwEmu(rgbw);  // ordering goes here.
 
-LightStrip::LightStrip(uint8_t brightness) {
+LightStrip::LightStrip() {
   // constructor implementation
  strip = new CRGB[LED_COUNT];
 }

@@ -18,7 +18,7 @@ IPAddress ip(192, 168, 86, 177);
 EthernetClient client;
 MqttClient mqttClient(client);
 
-LightStrip strip(70);
+LightStrip strip();
 
 RgbwValue currentRgbw = {100, 100, 100, 50};
 
