@@ -20,6 +20,8 @@ MqttClient mqttClient(client);
 
 LightStrip strip(70);
 
+LightStripStatus currentStatus = {true, 50};
+
 const char broker[] = "192.168.86.78";
 uint16_t        port     = 1883;
 EventHandlerConfig config = {broker, port, MQTT_USERNAME, MQTT_PASSWORD};
@@ -57,19 +59,22 @@ void setup() {
   strip.begin();
   eventHandler.init();
   eventHandler.setCommandCallback(commandCallback);
-  eventHandler.publishStatus({true, 50});
+  eventHandler.publishStatus(currentStatus);
 }
 
 void commandCallback(const CommandEvent& event) {
   switch (event.command) {
     case Command::On:
-      strip.setColor(255, 150, 0, 30);
+      strip.setKelvin(2700, 220);
+      currentStatus.isOn = true;
       break;
     case Command::Off:
       strip.turnOff();
+      currentStatus.isOn = false;
       break;
     case Command::ChangeBrightness:
       strip.setBrightness(event.value);
+      currentStatus.brightness = event.value;
       break;
     case Command::ChangeKelvin:
       strip.setKelvin(event.value, 220);
@@ -77,6 +82,7 @@ void commandCallback(const CommandEvent& event) {
     default:
       Serial.println("Unknown command received");
   }
+  eventHandler.publishStatus(currentStatus);
 }
 
 void loop() {
@@ -87,7 +93,6 @@ void loop() {
     Serial.println("Disconnected from event handler");
     eventHandler.init();
   }
-  strip.setKelvin(2700, 220);
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= heartbeatInterval && eventHandler.isConnected()) {

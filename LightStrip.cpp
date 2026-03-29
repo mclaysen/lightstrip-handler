@@ -104,7 +104,8 @@ void LightStrip::setWhite(uint8_t w) {
 }
 
 void LightStrip::turnOff() {
-  fillAndShow(CRGB::Black);
+  FastLED.clear();
+  FastLED.show();
 }
 
 LightStrip::~LightStrip() { delete[] strip; }
