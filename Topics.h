@@ -23,6 +23,9 @@ struct Topic
 {
     const char* name;
     TopicType type;
+    bool shouldSubscribe() const {
+        return type == TopicType::Command;
+    }
 };
 
 struct TopicsAvailable {

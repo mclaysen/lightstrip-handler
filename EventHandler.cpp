@@ -1,0 +1,137 @@
+#include "EventHandler.h"
+#include "Topics.h"
+#include <ArduinoMqttClient.h>
+#include "Command.h"
+
+#define MQTT_ID "lightstrip-livingroom"
+
+EventHandler* EventHandler::instance_ = nullptr;
+
+EventHandler::EventHandler(MqttClient& client, const EventHandlerConfig& config)
+    : mqttClient_(client), config_(config), commandCallback_(nullptr) {
+    instance_ = this;
+}
+
+void EventHandler::init() {
+    connectToBrokerIfNeeded();
+}
+
+void EventHandler::loop() {
+    mqttClient_.poll();
+}
+
+bool EventHandler::isConnected() const {
+    return mqttClient_.connected();
+}
+
+void EventHandler::setCommandCallback(CommandCallback callback) {
+    commandCallback_ = callback;
+}
+
+bool EventHandler::publishStatus(const LightStripStatus& status) {
+    mqttClient_.beginMessage(Topics::LightstripSwitchStatus);
+    mqttClient_.print(status.isOn ? "ON" : "OFF");
+    mqttClient_.endMessage();
+
+    mqttClient_.beginMessage(Topics::LightstripBrightnessStatus);
+    mqttClient_.print(status.brightness);
+    mqttClient_.endMessage();
+
+    return true;
+}
+
+bool EventHandler::publishHeartbeat(const char* value) {
+    mqttClient_.beginMessage(Topics::LightstripHeartbeat);
+    mqttClient_.print(value);
+    mqttClient_.endMessage();
+    Serial.println("Published heartbeat");
+    return true; 
+}
+
+bool EventHandler::connectToBrokerIfNeeded() {
+    if (!mqttClient_.connected()) {
+        Serial.println("Connecting to MQTT broker...");
+        mqttClient_.setId(MQTT_ID);
+
+        mqttClient_.setUsernamePassword(config_.username, config_.password);
+
+        String willPayload = "disconnected";
+        bool willRetain = true;
+        int willQos = 1;
+
+        mqttClient_.beginWill(Topics::LightstripHeartbeat, willPayload.length(), willRetain, willQos);
+        mqttClient_.print(willPayload);
+        mqttClient_.endWill();
+
+        if (mqttClient_.connect(config_.brokerHost, config_.brokerPort)) {
+            Serial.println("Connected to MQTT broker");
+            mqttClient_.onMessage(onMqttMessageThunk);
+            suscribeToTopics();
+            return true;
+        } else {
+            Serial.print("Failed to connect to MQTT broker, state: ");
+            Serial.println(mqttClient_.connectError());
+            return false;
+        }
+    }
+    return true;
+}
+
+void EventHandler::suscribeToTopics() {
+    for (const Topic& topic : TopicsAvailable::list) {
+        if (topic.shouldSubscribe()) {
+            Serial.print("Subscribing to topic: ");
+            Serial.println(topic.name);
+            mqttClient_.subscribe(topic.name);
+        }
+    }
+}
+
+void EventHandler::onMqttMessage(int messageSize) {
+    String topic = mqttClient_.messageTopic();
+    Serial.print("Message arrived on topic: ");
+    Serial.println(topic);
+
+    char message[messageSize + 1];
+    int i = 0;
+    while (mqttClient_.available() && i < messageSize) {
+        message[i] = (char)mqttClient_.read();
+        i++;
+    }
+    message[i] = '\0'; // Null-terminate the string
+
+    Serial.print("Received message: ");
+    Serial.println(message);
+    Serial.println();
+
+    CommandEvent event = parseMessage(topic.c_str(), message);
+    if (commandCallback_) {
+        commandCallback_(event);
+    }
+}
+
+CommandEvent EventHandler::parseMessage(const char* topic, const char* payload) const {
+    CommandEvent event;
+    event.hasValue = false;
+
+    if (strcmp(topic, Topics::LightstripSwitchCommand) == 0) {
+        if (strcmp(payload, "ON") == 0) {
+            event.command = Command::On;
+            event.hasValue = false;
+        } else if (strcmp(payload, "OFF") == 0) {
+            event.command = Command::Off;
+            event.hasValue = false;
+        } else {
+            event.command = Command::Unknown;
+        }
+    } else if (strcmp(topic, Topics::LightstripBrightnessCommand) == 0) {
+        event.command = Command::ChangeBrightness;
+        event.value = atoi(payload);
+        event.hasValue = true;
+    } else {
+        event.command = Command::Unknown;
+        event.hasValue = false;
+    }
+    return event;
+}
+
