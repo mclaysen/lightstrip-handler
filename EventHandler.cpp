@@ -38,7 +38,7 @@ bool EventHandler::publishStatus(const LightStripStatus& status) {
     mqttClient_.endMessage();
 
     mqttClient_.beginMessage(Topics::LightstripRgbwStatus);
-    mqttClient_.print(status.rgbw);
+    mqttClient_.print(status.rgbw.toString());
     mqttClient_.endMessage();
 
     return true;

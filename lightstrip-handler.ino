@@ -20,7 +20,9 @@ MqttClient mqttClient(client);
 
 LightStrip strip(70);
 
-LightStripStatus currentStatus = {true, 50, "255,255,255,50", 2700};
+RgbwValue currentRgbw = {100, 100, 100, 50};
+
+LightStripStatus currentStatus = {true, 50, currentRgbw, 2700};
 
 const char broker[] = "192.168.86.78";
 uint16_t        port     = 1883;
@@ -72,12 +74,16 @@ void initializeStrip() {
     strip.turnOff();
   }
   eventHandler.publishStatus(currentStatus);
+  eventHandler.publishHeartbeat();
 }
 
 void commandCallback(const CommandEvent& event) {
   switch (event.command) {
     case Command::On:
-      strip.setBrightness(currentStatus.brightness);
+      if(currentStatus.isOn) break;
+      
+      strip.setColor(currentStatus.rgbw.r, currentStatus.rgbw.g, currentStatus.rgbw.b, currentStatus.rgbw.w);
+      Serial.println("Current RGBW: " + currentStatus.rgbw.toString());
       currentStatus.isOn = true;
       break;
     case Command::Off:
@@ -94,7 +100,7 @@ void commandCallback(const CommandEvent& event) {
       break;
     case Command::ChangeColor:
       strip.setColor(event.rgbwValue.r, event.rgbwValue.g, event.rgbwValue.b, event.rgbwValue.w);
-      currentStatus.rgbw = String(event.rgbwValue.r) + "," + String(event.rgbwValue.g) + "," + String(event.rgbwValue.b) + "," + String(event.rgbwValue.w);
+      currentStatus.rgbw = event.rgbwValue;
       break;
     default:
       Serial.println("Unknown command received");

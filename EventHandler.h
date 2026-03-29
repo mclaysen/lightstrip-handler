@@ -22,6 +22,10 @@ struct RgbwValue {
     uint8_t g;
     uint8_t b;
     uint8_t w;
+
+    String toString() const {
+        return String(r) + "," + String(g) + "," + String(b) + "," + String(w);
+    }
 };
 
 struct CommandEvent {
