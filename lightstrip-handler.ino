@@ -10,6 +10,9 @@
 #include "EventHandler.h"
 #include "LightstripStatus.h"
 
+#include "src/effects/heartbeat/Heartbeat.h"
+#include "Effect.h"
+
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
 IPAddress myDns(192, 168, 86, 1);
@@ -18,9 +21,11 @@ IPAddress ip(192, 168, 86, 177);
 EthernetClient client;
 MqttClient mqttClient(client);
 
-LightStrip strip();
+LightStrip strip;
 
 RgbwValue currentRgbw = {100, 100, 100, 50};
+
+IEffect *heartbeatEffect = new HeartbeatEffect();
 
 LightStripStatus currentStatus = {true, 50, currentRgbw, 0, CurrentColorMode::Rgbw};
 
@@ -78,6 +83,7 @@ void initializeStrip() {
   }
   eventHandler.publishStatus(currentStatus);
   eventHandler.publishHeartbeat();
+  heartbeatEffect->begin(strip);
 }
 
 void commandCallback(const CommandEvent& event) {
@@ -125,6 +131,8 @@ void loop() {
     eventHandler.init();
   }
   unsigned long currentMillis = millis();
+
+  heartbeatEffect->update(strip, currentMillis);
 
   if (currentMillis - previousMillis >= heartbeatInterval && eventHandler.isConnected()) {
     previousMillis = currentMillis;

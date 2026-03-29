@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "Effect.h"
 
 struct RgbwValue {
     uint8_t r;
@@ -14,7 +15,8 @@ struct RgbwValue {
 
 enum class CurrentColorMode : uint8_t {
     Rgbw,
-    Temperature
+    Temperature,
+    Effect
 };
 
 struct LightStripStatus {
@@ -23,4 +25,5 @@ struct LightStripStatus {
     RgbwValue rgbw;
     uint16_t temperature;
     CurrentColorMode colorMode;
+    IEffect* effect;
 };
