@@ -68,7 +68,10 @@ void initializeStrip() {
   strip.setBrightness(currentStatus.brightness);
   if (currentStatus.isOn) {
     uint8_t r, g, b, w;
-    sscanf(currentStatus.rgbw.c_str(), "%hhu,%hhu,%hhu,%hhu", &r, &g, &b, &w);
+    r = currentStatus.rgbw.r;
+    g = currentStatus.rgbw.g;
+    b = currentStatus.rgbw.b;
+    w = currentStatus.rgbw.w;
     strip.setColor(r, g, b, w);
   } else {
     strip.turnOff();
