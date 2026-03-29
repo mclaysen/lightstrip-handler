@@ -22,7 +22,7 @@ LightStrip strip(70);
 
 RgbwValue currentRgbw = {100, 100, 100, 50};
 
-LightStripStatus currentStatus = {true, 50, currentRgbw, 2700};
+LightStripStatus currentStatus = {true, 50, currentRgbw, 0, CurrentColorMode::Rgbw};
 
 const char broker[] = "192.168.86.78";
 uint16_t        port     = 1883;
@@ -85,8 +85,11 @@ void commandCallback(const CommandEvent& event) {
     case Command::On:
       if(currentStatus.isOn) break;
       
-      strip.setColor(currentStatus.rgbw.r, currentStatus.rgbw.g, currentStatus.rgbw.b, currentStatus.rgbw.w);
-      Serial.println("Current RGBW: " + currentStatus.rgbw.toString());
+      if(currentStatus.colorMode == CurrentColorMode::Rgbw) {
+        strip.setColor(currentStatus.rgbw.r, currentStatus.rgbw.g, currentStatus.rgbw.b, currentStatus.rgbw.w);
+      } else if(currentStatus.colorMode == CurrentColorMode::Temperature) {
+        strip.setKelvin(currentStatus.temperature, 220);
+      }
       currentStatus.isOn = true;
       break;
     case Command::Off:
@@ -100,10 +103,12 @@ void commandCallback(const CommandEvent& event) {
     case Command::ChangeTemperature:
       strip.setKelvin(event.intValue, 220);
       currentStatus.temperature = event.intValue;
+      currentStatus.colorMode = CurrentColorMode::Temperature;
       break;
     case Command::ChangeColor:
       strip.setColor(event.rgbwValue.r, event.rgbwValue.g, event.rgbwValue.b, event.rgbwValue.w);
       currentStatus.rgbw = event.rgbwValue;
+      currentStatus.colorMode = CurrentColorMode::Rgbw;
       break;
     default:
       Serial.println("Unknown command received");

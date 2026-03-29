@@ -12,9 +12,15 @@ struct RgbwValue {
     }
 };
 
+enum class CurrentColorMode : uint8_t {
+    Rgbw,
+    Temperature
+};
+
 struct LightStripStatus {
     bool isOn;
     uint8_t brightness;
     RgbwValue rgbw;
     uint16_t temperature;
+    CurrentColorMode colorMode;
 };
