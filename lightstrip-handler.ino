@@ -114,7 +114,7 @@ void commandCallback(const CommandEvent& event) {
       currentEffect = nullptr;
       break;
     case Command::ChangeBrightness:
-      strip.setBrightnessAndShowevent.intValue);
+      strip.setBrightnessAndShow(event.intValue);
       currentStatus.brightness = event.intValue;
       break;
     case Command::ChangeTemperature:
