@@ -1,10 +1,18 @@
-#include <ArduinoMqttClient.h>
 #include <SPI.h>
 #include <Ethernet.h>
-#include <Adafruit_NeoPixel.h>
+#include <ArduinoMqttClient.h>
 
 #include "arduino_secrets.h"
 #include "LightStrip.h"
+#include "Command.h"
+#include "Topics.h"
+
+#include "EventHandler.h"
+#include "LightstripStatus.h"
+
+#include "src/effects/heartbeat/Heartbeat.h"
+#include "src/effects/easter/easter.h"
+#include "Effect.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
@@ -14,22 +22,18 @@ IPAddress ip(192, 168, 86, 177);
 EthernetClient client;
 MqttClient mqttClient(client);
 
-bool connectedToBroker = false;
+LightStrip strip;
 
-// Variables to measure the speed
-unsigned long beginMicros, endMicros;
-unsigned long byteCount = 0;
-bool printWebData = true;  // set to false for better speed measurement
+RgbwValue currentRgbw = { 100, 100, 100, 50 };
 
-LightStrip strip(60);
+IEffect* currentEffect;
+
+LightStripStatus currentStatus = { true, 50, currentRgbw, 0, CurrentColorMode::Rgbw, false, "none" };
 
 const char broker[] = "192.168.86.78";
-int        port     = 1883;
-const char statusTopic[]  = "ic/livingroom/lightstrip/status";
-const char switchTopic[] = "ic/livingroom/lightstrip/switch";
-const char brightnessStateTopic[] = "ic/livingroom/lightstrip/brightness/status";
-const char brightnessSetTopic[] = "ic/livingroom/lightstrip/brightness/set";
-const char heartbeatTopic[] = "ic/livingroom/lightstrip/heartbeat";
+uint16_t port = 1883;
+EventHandlerConfig config = { broker, port, MQTT_USERNAME, MQTT_PASSWORD };
+EventHandler eventHandler(mqttClient, config);
 const long heartbeatInterval = 10000;
 unsigned long previousMillis = 0;
 
@@ -47,7 +51,7 @@ void setup() {
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
       Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
       while (true) {
-        delay(1); // do nothing, no point running without Ethernet hardware
+        delay(1);  // do nothing, no point running without Ethernet hardware
       }
     }
     if (Ethernet.linkStatus() == LinkOFF) {
@@ -60,143 +64,122 @@ void setup() {
     Serial.println(Ethernet.localIP());
   }
 
-  connectToMqttBroker();
+  eventHandler.init();
+  initializeStrip();
+  eventHandler.setCommandCallback(commandCallback);
+}
+
+void initializeStrip() {
   strip.begin();
-  strip.pulseWhite(15);
-  publishInitialStatus();
+  strip.setBrightnessAndShow(currentStatus.brightness);
+  if (currentStatus.isOn) {
+    uint8_t r, g, b, w;
+    r = currentStatus.rgbw.r;
+    g = currentStatus.rgbw.g;
+    b = currentStatus.rgbw.b;
+    w = currentStatus.rgbw.w;
+    strip.setColor(r, g, b, w);
+  } else {
+    strip.turnOff();
+  }
+  eventHandler.publishStatus(currentStatus);
+  eventHandler.publishHeartbeat();
 }
 
-void publishInitialStatus() {
-  mqttClient.beginMessage(statusTopic);
-  mqttClient.print("ON");
-  mqttClient.endMessage();
-
-  mqttClient.beginMessage(brightnessStateTopic);
-  mqttClient.print("50");
-  mqttClient.endMessage();
-  Serial.println("Published initial status");
-}
-
-void connectToMqttBroker() {
-  if(!connectedToBroker)
-  {
-    // You can provide a unique client ID, if not set the library uses Arduino-millis()
-    // Each client must have a unique client ID
-    mqttClient.setId("lightstrip-livingroom");
-
-    // You can provide a username and password for authentication
-    mqttClient.setUsernamePassword(MQTT_USERNAME, MQTT_PASSWORD);
-
-    String willPayload = "disconnected";
-    bool willRetain = true;
-    int willQos = 1;
-
-    mqttClient.beginWill(heartbeatTopic, willPayload.length(), willRetain, willQos);
-    mqttClient.print(willPayload);
-    mqttClient.endWill();
-
-    Serial.print("Attempting to connect to the MQTT broker: ");
-    Serial.println(broker);
-
-    if (!mqttClient.connect(broker, port)) {
-      Serial.print("MQTT connection failed! Error code = ");
-      Serial.println(mqttClient.connectError());
+void setStripToCurrentStatus() {
+  if (currentStatus.isOn) {
+    if (currentStatus.colorMode == CurrentColorMode::Rgbw) {
+      strip.setColor(currentStatus.rgbw.r, currentStatus.rgbw.g, currentStatus.rgbw.b, currentStatus.rgbw.w);
+    } else if (currentStatus.colorMode == CurrentColorMode::Temperature) {
+      strip.setKelvin(currentStatus.temperature, 220);
     }
-    else
-    {
-      connectedToBroker = true;
-    
-      Serial.println("You're connected to the MQTT broker!");
-      Serial.println();
-
-      Serial.print("Subscribing to topic: ");
-      Serial.println(switchTopic);
-      Serial.println();
-
-      mqttClient.onMessage(onMqttMessage);
-
-      // subscribe to a topic
-      mqttClient.subscribe(switchTopic);
-      mqttClient.subscribe(brightnessSetTopic);
-    }
+  } else {
+    strip.turnOff();
   }
 }
 
-bool publishHeartbeat() {
-  mqttClient.beginMessage(heartbeatTopic);
-  mqttClient.print("alive");
-  mqttClient.endMessage();
-  Serial.println("Published heartbeat");
-  return true; // return true to repeat this timer
+void commandCallback(const CommandEvent& event) {
+  switch (event.command) {
+    case Command::On:
+      if (currentStatus.isOn) break;
+
+      currentStatus.isOn = true;
+      setStripToCurrentStatus();
+      break;
+    case Command::Off:
+      strip.turnOff();
+      currentStatus.isOn = false;
+      currentStatus.hasEffect = false;
+      currentStatus.currentEffectName = "none";
+      currentEffect = nullptr;
+      break;
+    case Command::ChangeBrightness:
+      strip.setBrightnessAndShow(event.intValue);
+      currentStatus.brightness = event.intValue;
+      break;
+    case Command::ChangeTemperature:
+      strip.setKelvin(event.intValue, 220);
+      currentStatus.temperature = event.intValue;
+      currentStatus.colorMode = CurrentColorMode::Temperature;
+      break;
+    case Command::ChangeColor:
+      strip.setColor(event.rgbwValue.r, event.rgbwValue.g, event.rgbwValue.b, event.rgbwValue.w);
+      currentStatus.rgbw = event.rgbwValue;
+      currentStatus.colorMode = CurrentColorMode::Rgbw;
+      break;
+    case Command::SetEffect:
+      Serial.println("Setting effect:");
+      Serial.println(event.stringValue);
+      if (strcmp(event.stringValue, "heartbeat") == 0) {
+        currentEffect = new HeartbeatEffect();
+        currentEffect->begin(strip);
+        currentStatus.hasEffect = true;
+        currentStatus.currentEffectName = "heartbeat";
+      } 
+      else if (strcmp(event.stringValue, "easter") == 0) {
+        currentEffect = new EasterEffect();
+        currentEffect->begin(strip);
+        currentStatus.hasEffect = true;
+        currentStatus.currentEffectName = "easter";
+      }
+      else if(strcmp(event.stringValue, "none") == 0) {
+        if(currentEffect) {
+          currentEffect->stop(strip);
+          delete currentEffect;
+          currentEffect = nullptr;
+        }
+        currentStatus.hasEffect = false;
+        currentStatus.currentEffectName = "none";
+        setStripToCurrentStatus();
+      }
+      else {
+        Serial.print("Unknown effect: ");
+        Serial.println(event.stringValue);
+        currentStatus.currentEffectName = "none";
+        currentStatus.hasEffect = false;
+      }
+      break;
+    default:
+      Serial.println("Unknown command received");
+  }
+  eventHandler.publishStatus(currentStatus);
 }
 
 void loop() {
-  mqttClient.poll();
+  eventHandler.loop();
 
-  if(!mqttClient.connected())
-  {
-    Serial.println("Disconnected from MQTT broker");
-    connectedToBroker = false;
-    connectToMqttBroker();
+  if (!eventHandler.isConnected()) {
+    Serial.println("Disconnected from event handler");
+    eventHandler.init();
   }
-
   unsigned long currentMillis = millis();
 
-  if (currentMillis - previousMillis >= heartbeatInterval && connectedToBroker) {
-    // save the last time a message was sent
+  if(currentStatus.hasEffect && currentEffect) {
+    currentEffect->update(strip, currentMillis);
+  }
+
+  if (currentMillis - previousMillis >= heartbeatInterval && eventHandler.isConnected()) {
     previousMillis = currentMillis;
-    publishHeartbeat();
+    eventHandler.publishHeartbeat();
   }
-}
-void onMqttMessage(int messageSize) {
-  String topic = mqttClient.messageTopic();
-  Serial.print("Message arrived on topic: "); 
-  Serial.print(topic);
-
-  // we received a message, print out the topic and contents
-  char message[messageSize + 1];
-
-  int i = 0;
-
-  while(mqttClient.available() && i < messageSize) {
-    message[i] = (char)mqttClient.read();
-    i++;
-  }
-  message[i] = '\0'; // Null-terminate the string
-
-  Serial.print("Received message: ");
-  Serial.println(message);
-  Serial.println();
-  
-  if(topic.indexOf("brightness")>=0)
-  {
-    int brightness = atoi(message);
-    strip.setBrightness(brightness);
-    mqttClient.beginMessage(brightnessStateTopic);
-    mqttClient.print(message);
-    mqttClient.endMessage();
-
-  }
-  else
-  {
-    if(strcmp(message, "ON") == 0)
-    {
-      strip.setColor(255, 150, 0, 30);
-      mqttClient.beginMessage(statusTopic);
-      mqttClient.print("ON");
-      mqttClient.endMessage();
-    }
-    else if(strcmp(message, "OFF") == 0)
-    {
-      strip.turnOff();
-      mqttClient.beginMessage(statusTopic);
-      mqttClient.print("OFF");
-      mqttClient.endMessage();
-    }
-    else
-    {
-      Serial.println("Unknown command received");
-    }
-  }
-  Serial.println();
 }
