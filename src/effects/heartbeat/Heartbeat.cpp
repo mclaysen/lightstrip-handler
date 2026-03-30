@@ -11,7 +11,6 @@ static uint8_t heartbeatBrightness(uint16_t phaseMs) {
 void HeartbeatEffect::begin(LightStrip& strip) {
     startMs = millis();
     lastFrameMs = 0;
-    strip.setColor(255, 0, 0, 0);
 }
 
 void HeartbeatEffect::update(LightStrip& strip, uint32_t nowMs) {
@@ -20,9 +19,9 @@ void HeartbeatEffect::update(LightStrip& strip, uint32_t nowMs) {
 
     uint16_t phase = (nowMs - startMs) % 1000;
     uint8_t b = heartbeatBrightness(phase);
-    strip.setBrightness(b);
+    strip.setBrightnessAndShow(b);
 }
 
 void HeartbeatEffect::stop(LightStrip& strip) {
-    strip.turnOff();
+    //strip.turnOff();
 }
