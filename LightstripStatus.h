@@ -15,8 +15,7 @@ struct RgbwValue {
 
 enum class CurrentColorMode : uint8_t {
     Rgbw,
-    Temperature,
-    Effect
+    Temperature
 };
 
 struct LightStripStatus {
@@ -25,5 +24,6 @@ struct LightStripStatus {
     RgbwValue rgbw;
     uint16_t temperature;
     CurrentColorMode colorMode;
-    IEffect* effect;
+    bool hasEffect;
+    String currentEffectName;
 };

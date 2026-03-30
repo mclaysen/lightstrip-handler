@@ -8,5 +8,6 @@ enum class Command : uint8_t {
   ChangeBrightness,
   ChangeColor,
   ChangeTemperature,
+  SetEffect,
   Unknown
 };

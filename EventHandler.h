@@ -14,6 +14,7 @@ enum class HeartbeatStatus : uint8_t {
 enum class CommandValueType : uint8_t {
     None,
     Integer,
+    String,
     Rgbw
 };
 
@@ -23,6 +24,7 @@ struct CommandEvent {
     union {
         int16_t intValue;
         RgbwValue rgbwValue;
+        char stringValue[32];
     };
 };
 

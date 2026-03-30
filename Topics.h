@@ -21,6 +21,8 @@ struct Topics {
     static constexpr char LightstripRgbwSet[] = "ic/livingroom/lightstrip/rgbw/set";
     static constexpr char LightstripTempSet[] = "ic/livingroom/lightstrip/temp/set";
     static constexpr char LightstripTempStatus[] = "ic/livingroom/lightstrip/temp/status";
+    static constexpr char LightstripEffectSet[] = "ic/livingroom/lightstrip/effect/set";
+    static constexpr char LightstripEffectStatus[] = "ic/livingroom/lightstrip/effect/status";
 };
 
 struct Topic
@@ -42,6 +44,8 @@ struct TopicsAvailable {
         {Topics::LightstripRgbwStatus, TopicType::Status},
         {Topics::LightstripRgbwSet, TopicType::Command},
         {Topics::LightstripTempSet, TopicType::Command},
-        {Topics::LightstripTempStatus, TopicType::Status}
+        {Topics::LightstripTempStatus, TopicType::Status},
+        {Topics::LightstripEffectSet, TopicType::Command},
+        {Topics::LightstripEffectStatus, TopicType::Status}
     };
 };

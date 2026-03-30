@@ -11,6 +11,7 @@
 #include "LightstripStatus.h"
 
 #include "src/effects/heartbeat/Heartbeat.h"
+#include "src/effects/easter/easter.h"
 #include "Effect.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
@@ -23,15 +24,15 @@ MqttClient mqttClient(client);
 
 LightStrip strip;
 
-RgbwValue currentRgbw = {100, 100, 100, 50};
+RgbwValue currentRgbw = { 100, 100, 100, 50 };
 
-IEffect *heartbeatEffect = new HeartbeatEffect();
+IEffect* currentEffect;
 
-LightStripStatus currentStatus = {true, 50, currentRgbw, 0, CurrentColorMode::Rgbw};
+LightStripStatus currentStatus = { true, 50, currentRgbw, 0, CurrentColorMode::Rgbw, false, "none" };
 
 const char broker[] = "192.168.86.78";
-uint16_t        port     = 1883;
-EventHandlerConfig config = {broker, port, MQTT_USERNAME, MQTT_PASSWORD};
+uint16_t port = 1883;
+EventHandlerConfig config = { broker, port, MQTT_USERNAME, MQTT_PASSWORD };
 EventHandler eventHandler(mqttClient, config);
 const long heartbeatInterval = 10000;
 unsigned long previousMillis = 0;
@@ -50,7 +51,7 @@ void setup() {
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
       Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
       while (true) {
-        delay(1); // do nothing, no point running without Ethernet hardware
+        delay(1);  // do nothing, no point running without Ethernet hardware
       }
     }
     if (Ethernet.linkStatus() == LinkOFF) {
@@ -63,14 +64,14 @@ void setup() {
     Serial.println(Ethernet.localIP());
   }
 
-  initializeStrip();
   eventHandler.init();
+  initializeStrip();
   eventHandler.setCommandCallback(commandCallback);
 }
 
 void initializeStrip() {
   strip.begin();
-  strip.setBrightness(currentStatus.brightness);
+  strip.setBrightnessAndShow(currentStatus.brightness);
   if (currentStatus.isOn) {
     uint8_t r, g, b, w;
     r = currentStatus.rgbw.r;
@@ -83,27 +84,37 @@ void initializeStrip() {
   }
   eventHandler.publishStatus(currentStatus);
   eventHandler.publishHeartbeat();
-  heartbeatEffect->begin(strip);
+}
+
+void setStripToCurrentStatus() {
+  if (currentStatus.isOn) {
+    if (currentStatus.colorMode == CurrentColorMode::Rgbw) {
+      strip.setColor(currentStatus.rgbw.r, currentStatus.rgbw.g, currentStatus.rgbw.b, currentStatus.rgbw.w);
+    } else if (currentStatus.colorMode == CurrentColorMode::Temperature) {
+      strip.setKelvin(currentStatus.temperature, 220);
+    }
+  } else {
+    strip.turnOff();
+  }
 }
 
 void commandCallback(const CommandEvent& event) {
   switch (event.command) {
     case Command::On:
-      if(currentStatus.isOn) break;
-      
-      if(currentStatus.colorMode == CurrentColorMode::Rgbw) {
-        strip.setColor(currentStatus.rgbw.r, currentStatus.rgbw.g, currentStatus.rgbw.b, currentStatus.rgbw.w);
-      } else if(currentStatus.colorMode == CurrentColorMode::Temperature) {
-        strip.setKelvin(currentStatus.temperature, 220);
-      }
+      if (currentStatus.isOn) break;
+
       currentStatus.isOn = true;
+      setStripToCurrentStatus();
       break;
     case Command::Off:
       strip.turnOff();
       currentStatus.isOn = false;
+      currentStatus.hasEffect = false;
+      currentStatus.currentEffectName = "none";
+      currentEffect = nullptr;
       break;
     case Command::ChangeBrightness:
-      strip.setBrightness(event.intValue);
+      strip.setBrightnessAndShowevent.intValue);
       currentStatus.brightness = event.intValue;
       break;
     case Command::ChangeTemperature:
@@ -116,6 +127,38 @@ void commandCallback(const CommandEvent& event) {
       currentStatus.rgbw = event.rgbwValue;
       currentStatus.colorMode = CurrentColorMode::Rgbw;
       break;
+    case Command::SetEffect:
+      Serial.println("Setting effect:");
+      Serial.println(event.stringValue);
+      if (strcmp(event.stringValue, "heartbeat") == 0) {
+        currentEffect = new HeartbeatEffect();
+        currentEffect->begin(strip);
+        currentStatus.hasEffect = true;
+        currentStatus.currentEffectName = "heartbeat";
+      } 
+      else if (strcmp(event.stringValue, "easter") == 0) {
+        currentEffect = new EasterEffect();
+        currentEffect->begin(strip);
+        currentStatus.hasEffect = true;
+        currentStatus.currentEffectName = "easter";
+      }
+      else if(strcmp(event.stringValue, "none") == 0) {
+        if(currentEffect) {
+          currentEffect->stop(strip);
+          delete currentEffect;
+          currentEffect = nullptr;
+        }
+        currentStatus.hasEffect = false;
+        currentStatus.currentEffectName = "none";
+        setStripToCurrentStatus();
+      }
+      else {
+        Serial.print("Unknown effect: ");
+        Serial.println(event.stringValue);
+        currentStatus.currentEffectName = "none";
+        currentStatus.hasEffect = false;
+      }
+      break;
     default:
       Serial.println("Unknown command received");
   }
@@ -125,14 +168,15 @@ void commandCallback(const CommandEvent& event) {
 void loop() {
   eventHandler.loop();
 
-  if(!eventHandler.isConnected())
-  {
+  if (!eventHandler.isConnected()) {
     Serial.println("Disconnected from event handler");
     eventHandler.init();
   }
   unsigned long currentMillis = millis();
 
-  heartbeatEffect->update(strip, currentMillis);
+  if(currentStatus.hasEffect && currentEffect) {
+    currentEffect->update(strip, currentMillis);
+  }
 
   if (currentMillis - previousMillis >= heartbeatInterval && eventHandler.isConnected()) {
     previousMillis = currentMillis;

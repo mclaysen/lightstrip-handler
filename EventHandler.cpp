@@ -34,11 +34,19 @@ bool EventHandler::publishStatus(const LightStripStatus& status) {
     mqttClient_.endMessage();
 
     mqttClient_.beginMessage(Topics::LightstripBrightnessStatus);
-    mqttClient_.print(status.brightness);
+    mqttClient_.print(String(status.brightness));
     mqttClient_.endMessage();
 
     mqttClient_.beginMessage(Topics::LightstripRgbwStatus);
     mqttClient_.print(status.rgbw.toString());
+    mqttClient_.endMessage();
+
+    /*mqttClient_.beginMessage(Topics::LightstripTempStatus);
+    mqttClient_.print(String(status.temperature));
+    mqttClient_.endMessage();*/
+
+    mqttClient_.beginMessage(Topics::LightstripEffectStatus);
+    mqttClient_.print(status.currentEffectName);
     mqttClient_.endMessage();
 
     return true;
@@ -127,6 +135,7 @@ CommandEvent EventHandler::parseMessage(const char* topic, const char* payload) 
             event.valueType = CommandValueType::None;
         } else {
             event.command = Command::Unknown;
+            event.valueType = CommandValueType::None;
         }
     } 
     else if (strcmp(topic, Topics::LightstripBrightnessCommand) == 0) {
@@ -145,6 +154,13 @@ CommandEvent EventHandler::parseMessage(const char* topic, const char* payload) 
         event.command = Command::ChangeTemperature;
         event.valueType = CommandValueType::Integer;
         event.intValue = atoi(payload);
+    }
+    else if(strcasecmp(topic, Topics::LightstripEffectSet) == 0)
+    {
+        event.command = Command::SetEffect;
+        event.valueType = CommandValueType::String;
+        strncpy(event.stringValue, payload, sizeof(event.stringValue) - 1);
+        event.stringValue[sizeof(event.stringValue) - 1] = '\0';
     }
     else {
         event.command = Command::Unknown;
