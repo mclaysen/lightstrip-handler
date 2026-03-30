@@ -66,8 +66,27 @@ void LightStrip::setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
   FastLED.show();
 }
 
+void LightStrip::loadPixelColor(uint16_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+  if (index >= LED_COUNT) return;
+
+  const uint8_t rr = qadd8(r, w);
+  const uint8_t gg = qadd8(g, w);
+  const uint8_t bb = qadd8(b, w);
+
+  strip[index] = CRGB(rr, gg, bb);
+}
+
+void LightStrip::show() {
+  FastLED.show();
+}
+
+
 void LightStrip::setBrightness(uint8_t brightness) {
   FastLED.setBrightness(brightness);
+}
+
+void LightStrip::setBrightnessAndShow(uint8_t brightness) {
+  setBrightness(brightness);
   FastLED.show();
 }
 

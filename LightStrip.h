@@ -12,11 +12,13 @@ public:
   LightStrip();
   ~LightStrip(); 
   void begin();
-  void update();
+  void show();
   void setColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0);
+  void loadPixelColor(uint16_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0);
   void setWhite(uint8_t w);
   void turnOff();
   void setBrightness(uint8_t brightness);
+  void setBrightnessAndShow(uint8_t brightness);
   void setKelvin(uint16_t kelvin, uint8_t level);
 };
 
